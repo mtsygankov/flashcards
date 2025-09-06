@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Chinese-English Flashcards{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/css/styles.css">
+    
+    <style>
+        .chinese-font { 
+            font-family: 'Noto Sans SC', sans-serif; 
+        }
+        .card-flip { 
+            transition: transform 0.6s; 
+            transform-style: preserve-3d; 
+        }
+        .card-flip.flipped { 
+            transform: rotateY(180deg); 
+        }
+        .card-face { 
+            backface-visibility: hidden; 
+        }
+        .card-back { 
+            transform: rotateY(180deg); 
+        }
+        
+        /* Custom scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+    </style>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm border-b">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <a href="/" class="text-xl font-bold text-gray-800">
+                        <span class="chinese-font">汉字</span> Flashcards
+                    </a>
+                    {% if current_user %}
+                    <div class="hidden md:flex space-x-6">
+                        <a href="/dashboard" class="text-gray-600 hover:text-gray-800 transition duration-200">Dashboard</a>
+                        <a href="/decks" class="text-gray-600 hover:text-gray-800 transition duration-200">My Decks</a>
+                        <a href="/study" class="text-gray-600 hover:text-gray-800 transition duration-200">Study</a>
+                        <a href="/statistics" class="text-gray-600 hover:text-gray-800 transition duration-200">Statistics</a>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    {% if current_user %}
+                    <div class="flex items-center space-x-3">
+                        <div class="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center">
+                            <span class="text-white text-sm font-semibold">{{ current_user.username[0].upper() }}</span>
+                        </div>
+                        <span class="text-gray-700 font-medium">{{ current_user.username }}</span>
+                        <button 
+                            hx-post="/api/auth/logout" 
+                            hx-trigger="click"
+                            hx-redirect="/"
+                            class="text-gray-500 hover:text-gray-700 text-sm"
+                        >
+                            Logout
+                        </button>
+                    </div>
+                    {% else %}
+                    <div class="space-x-3">
+                        <a href="/login" class="text-gray-600 hover:text-gray-800">Login</a>
+                        <a href="/register" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition duration-200">
+                            Sign Up
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Mobile Navigation Menu -->
+    {% if current_user %}
+    <div class="md:hidden bg-white border-b">
+        <div class="container mx-auto px-4 py-2">
+            <div class="flex space-x-4 overflow-x-auto">
+                <a href="/dashboard" class="text-sm text-gray-600 hover:text-gray-800 whitespace-nowrap">Dashboard</a>
+                <a href="/decks" class="text-sm text-gray-600 hover:text-gray-800 whitespace-nowrap">My Decks</a>
+                <a href="/study" class="text-sm text-gray-600 hover:text-gray-800 whitespace-nowrap">Study</a>
+                <a href="/statistics" class="text-sm text-gray-600 hover:text-gray-800 whitespace-nowrap">Statistics</a>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Flash Messages -->
+    <div id="flash-messages" class="container mx-auto px-4 mt-4">
+        <!-- Messages will be inserted here by HTMX -->
+    </div>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t mt-auto">
+        <div class="container mx-auto px-4 py-6">
+            <div class="text-center text-gray-500 text-sm">
+                <p>&copy; 2024 Chinese-English Flashcards. Built with FastAPI and ❤️</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Loading Indicator -->
+    <div id="loading-indicator" class="htmx-indicator fixed top-4 right-4 bg-blue-500 text-white px-3 py-2 rounded-lg shadow-lg z-50">
+        <div class="flex items-center space-x-2">
+            <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            <span class="text-sm">Loading...</span>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script src="/static/js/app.js"></script>
+    <script>
+        // Flash message system
+        function showFlashMessage(message, type = 'info') {
+            const container = document.getElementById('flash-messages');
+            const alertClass = type === 'error' ? 'bg-red-100 border-red-400 text-red-700' : 
+                              type === 'success' ? 'bg-green-100 border-green-400 text-green-700' :
+                              'bg-blue-100 border-blue-400 text-blue-700';
+            
+            const alertHtml = `
+                <div class="border px-4 py-3 rounded mb-4 ${alertClass}" role="alert">
+                    <span class="block sm:inline">${message}</span>
+                    <button class="float-right ml-2" onclick="this.parentElement.remove()">
+                        <span class="text-lg">&times;</span>
+                    </button>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('afterbegin', alertHtml);
+            
+            // Auto-remove after 5 seconds
+            setTimeout(() => {
+                container.firstElementChild?.remove();
+            }, 5000);
+        }
+
+        // Card flip animation
+        function flipCard(cardElement) {
+            cardElement.classList.toggle('flipped');
+        }
+
+        // HTMX event listeners
+        document.addEventListener('htmx:afterRequest', function(event) {
+            if (event.detail.xhr.status >= 400) {
+                const response = JSON.parse(event.detail.xhr.responseText);
+                showFlashMessage(response.detail || 'An error occurred', 'error');
+            }
+        });
+
+        document.addEventListener('htmx:responseError', function(event) {
+            showFlashMessage('Network error occurred', 'error');
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(event) {
+            if (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA') {
+                return;
+            }
+            
+            switch(event.key) {
+                case ' ': // Spacebar to flip card
+                    event.preventDefault();
+                    const card = document.querySelector('.flashcard.active');
+                    if (card) flipCard(card);
+                    break;
+                case 'ArrowLeft':
+                    event.preventDefault();
+                    document.querySelector('.btn-previous')?.click();
+                    break;
+                case 'ArrowRight':
+                    event.preventDefault();
+                    document.querySelector('.btn-next')?.click();
+                    break;
+            }
+        });
+
+        // Auto-focus search inputs
+        document.addEventListener('DOMContentLoaded', function() {
+            const searchInput = document.querySelector('input[type="search"]');
+            if (searchInput) {
+                searchInput.focus();
+            }
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

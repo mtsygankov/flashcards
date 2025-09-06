@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}Study - Chinese-English Flashcards{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Study Session Header -->
+    <div class="bg-white p-6 rounded-lg shadow-sm border mb-8" id="session-header">
+        <div class="flex items-center justify-between mb-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">{{ deck.name }}</h1>
+                <p class="text-gray-600">{{ direction_text }} • Session {{ session.id[:8] }}</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-center">
+                    <div class="text-2xl font-bold text-blue-600" id="cards-count">{{ current_card + 1 }}</div>
+                    <div class="text-sm text-gray-600">of {{ total_cards }}</div>
+                </div>
+                <button 
+                    onclick="endSession()"
+                    class="bg-red-100 hover:bg-red-200 text-red-600 px-4 py-2 rounded-lg font-medium transition duration-200"
+                >
+                    End Session
+                </button>
+            </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="w-full bg-gray-200 rounded-full h-2 mb-4">
+            <div 
+                class="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                style="width: {{ (current_card / total_cards * 100) if total_cards > 0 else 0 }}%"
+                id="progress-bar"
+            ></div>
+        </div>
+
+        <!-- Session Stats -->
+        <div class="flex space-x-6 text-sm">
+            <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                <span class="text-gray-600">Correct: <span id="correct-count" class="font-medium">{{ session.correct_answers }}</span></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 bg-gray-400 rounded-full"></div>
+                <span class="text-gray-600">Total: <span id="total-attempts" class="font-medium">{{ session.cards_studied }}</span></span>
+            </div>
+            <div class="flex items-center space-x-2">
+                <div class="w-3 h-3 bg-blue-500 rounded-full"></div>
+                <span class="text-gray-600">Time: <span id="session-timer" class="font-medium">0:00</span></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Study Mode Selection -->
+    {% if not current_card_data %}
+    <div class="bg-white p-8 rounded-lg shadow-sm border text-center">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">Choose Study Mode</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-md mx-auto">
+            <button 
+                onclick="startFlipMode()"
+                class="p-6 bg-blue-50 hover:bg-blue-100 border-2 border-blue-200 rounded-lg transition duration-200"
+            >
+                <div class="w-12 h-12 bg-blue-500 rounded-lg mx-auto mb-3 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2m0 0v2a1 1 0 01-1 1H8a1 1 0 01-1-1V4m0 0H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V6a2 2 0 00-2-2h-2"></path>
+                    </svg>
+                </div>
+                <h3 class="font-semibold text-gray-800">Flip Cards</h3>
+                <p class="text-sm text-gray-600 mt-1">Review and flip cards</p>
+            </button>
+
+            <button 
+                onclick="startQuizMode()"
+                class="p-6 bg-green-50 hover:bg-green-100 border-2 border-green-200 rounded-lg transition duration-200"
+            >
+                <div class="w-12 h-12 bg-green-500 rounded-lg mx-auto mb-3 flex items-center justify-center">
+                    <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h3 class="font-semibold text-gray-800">Quiz Mode</h3>
+                <p class="text-sm text-gray-600 mt-1">Test your knowledge</p>
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Flashcard Display -->
+    {% if current_card_data %}
+    <div class="relative perspective-1000" id="flashcard-container">
+        <div class="flashcard card-flip bg-white rounded-lg shadow-lg border min-h-96 cursor-pointer active" onclick="flipCard(this)">
+            <!-- Front Side -->
+            <div class="card-face absolute inset-0 p-8 flex flex-col items-center justify-center text-center">
+                {% if direction == "chinese_to_english" %}
+                    <div class="chinese-font text-6xl font-bold text-gray-800 mb-4">{{ current_card_data.hanzi }}</div>
+                    <div class="text-2xl text-gray-600 mb-6">{{ current_card_data.pinyin }}</div>
+                {% else %}
+                    <div class="text-4xl font-semibold text-gray-800 mb-6">{{ current_card_data.english }}</div>
+                {% endif %}
+                
+                <div class="text-sm text-gray-500 mt-auto">
+                    <p>Click to flip • Space bar • Tap to reveal answer</p>
+                </div>
+            </div>
+
+            <!-- Back Side -->
+            <div class="card-face card-back absolute inset-0 p-8 flex flex-col items-center justify-center text-center">
+                {% if direction == "chinese_to_english" %}
+                    <div class="text-4xl font-semibold text-gray-800 mb-6">{{ current_card_data.english }}</div>
+                {% else %}
+                    <div class="chinese-font text-6xl font-bold text-gray-800 mb-4">{{ current_card_data.hanzi }}</div>
+                    <div class="text-2xl text-gray-600 mb-6">{{ current_card_data.pinyin }}</div>
+                {% endif %}
+
+                <!-- Card Progress Info -->
+                {% if current_card_data.user_progress %}
+                <div class="mt-auto pt-6 border-t border-gray-200 w-full">
+                    <div class="flex justify-center space-x-4 text-sm text-gray-600">
+                        <span>Accuracy: {{ "%.0f"|format(current_card_data.user_progress.accuracy_rate * 100) }}%</span>
+                        <span>Level: {{ mastery_levels[current_card_data.user_progress.mastery_level] }}</span>
+                        <span>Attempts: {{ current_card_data.user_progress.quiz_attempts }}</span>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Card Navigation -->
+        <div class="flex justify-between items-center mt-6">
+            <button 
+                onclick="previousCard()" 
+                class="btn-previous bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-3 rounded-lg font-medium transition duration-200 flex items-center space-x-2"
+                {% if current_card == 0 %}disabled{% endif %}
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                </svg>
+                <span>Previous</span>
+            </button>
+
+            <div class="flex space-x-3">
+                {% if study_mode == "flip" %}
+                <button 
+                    onclick="markCard('easy')"
+                    class="bg-green-100 hover:bg-green-200 text-green-600 px-4 py-2 rounded-lg font-medium transition duration-200"
+                >
+                    Easy
+                </button>
+                <button 
+                    onclick="markCard('hard')"
+                    class="bg-red-100 hover:bg-red-200 text-red-600 px-4 py-2 rounded-lg font-medium transition duration-200"
+                >
+                    Hard
+                </button>
+                {% endif %}
+            </div>
+
+            <button 
+                onclick="nextCard()" 
+                class="btn-next bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition duration-200 flex items-center space-x-2"
+            >
+                <span>Next</span>
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                </svg>
+            </button>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quiz Mode -->
+    {% if study_mode == "quiz" and quiz_question %}
+    <div class="bg-white p-8 rounded-lg shadow-sm border" id="quiz-container">
+        <div class="text-center mb-8">
+            <h3 class="text-xl font-semibold text-gray-800 mb-4">{{ quiz_question.question }}</h3>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl mx-auto">
+                {% for option in quiz_question.options %}
+                <button 
+                    onclick="selectAnswer('{{ option }}')"
+                    class="quiz-option p-4 text-left bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg transition duration-200"
+                    data-option="{{ option }}"
+                >
+                    <span class="chinese-font text-lg">{{ option }}</span>
+                </button>
+                {% endfor %}
+            </div>
+
+            <div class="mt-6">
+                <div id="quiz-feedback" class="hidden">
+                    <!-- Feedback will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Session Complete -->
+    {% if session_complete %}
+    <div class="bg-white p-8 rounded-lg shadow-sm border text-center">
+        <div class="w-16 h-16 bg-green-100 rounded-full mx-auto mb-4 flex items-center justify-center">
+            <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">Session Complete!</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-md mx-auto mb-6">
+            <div>
+                <div class="text-2xl font-bold text-blue-600">{{ session_stats.cards_studied }}</div>
+                <div class="text-sm text-gray-600">Cards Studied</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-green-600">{{ "%.0f"|format(session_stats.accuracy * 100) }}%</div>
+                <div class="text-sm text-gray-600">Accuracy</div>
+            </div>
+            <div>
+                <div class="text-2xl font-bold text-purple-600">{{ session_stats.duration }}m</div>
+                <div class="text-sm text-gray-600">Duration</div>
+            </div>
+        </div>
+        <div class="flex justify-center space-x-4">
+            <a href="/study" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-medium transition duration-200">
+                Study Again
+            </a>
+            <a href="/dashboard" class="bg-gray-100 hover:bg-gray-200 text-gray-600 px-6 py-3 rounded-lg font-medium transition duration-200">
+                Dashboard
+            </a>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let sessionStartTime = Date.now();
+let currentCardIndex = {{ current_card }};
+let totalCards = {{ total_cards }};
+let studyMode = "{{ study_mode }}";
+let currentQuestionStartTime;
+
+// Session timer
+function updateTimer() {
+    const elapsed = Math.floor((Date.now() - sessionStartTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    document.getElementById('session-timer').textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+setInterval(updateTimer, 1000);
+
+// Card navigation
+function nextCard() {
+    if (currentCardIndex < totalCards - 1) {
+        // Record interaction and load next card
+        recordCardInteraction('flip');
+        window.location.href = `?card=${currentCardIndex + 1}`;
+    } else {
+        endSession();
+    }
+}
+
+function previousCard() {
+    if (currentCardIndex > 0) {
+        window.location.href = `?card=${currentCardIndex - 1}`;
+    }
+}
+
+// Study mode functions
+function startFlipMode() {
+    window.location.href = '?mode=flip&card=0';
+}
+
+function startQuizMode() {
+    window.location.href = '?mode=quiz&card=0';
+}
+
+// Card interaction recording
+function recordCardInteraction(type, isCorrect = null) {
+    const sessionId = "{{ session.id }}";
+    const cardId = "{{ current_card_data.id if current_card_data else '' }}";
+    
+    fetch('/api/study/interactions', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+        },
+        body: JSON.stringify({
+            session_id: sessionId,
+            card_id: cardId,
+            interaction_type: type,
+            direction: "{{ direction }}",
+            response_time: currentQuestionStartTime ? Date.now() - currentQuestionStartTime : null
+        })
+    });
+}
+
+// Quiz functions
+function selectAnswer(answer) {
+    const buttons = document.querySelectorAll('.quiz-option');
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add('opacity-50');
+    });
+
+    // Submit answer
+    const sessionId = "{{ session.id }}";
+    const cardId = "{{ current_card_data.id if current_card_data else '' }}";
+    
+    fetch(`/api/study/sessions/${sessionId}/quiz`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+        },
+        body: JSON.stringify({
+            card_id: cardId,
+            selected_answer: answer,
+            response_time: currentQuestionStartTime ? Date.now() - currentQuestionStartTime : null
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        showQuizFeedback(data.correct, data.correct_answer, data.explanation);
+        
+        // Update session stats
+        updateSessionStats(data.correct);
+        
+        // Auto-advance after 2 seconds
+        setTimeout(nextCard, 2000);
+    });
+}
+
+function showQuizFeedback(isCorrect, correctAnswer, explanation) {
+    const feedback = document.getElementById('quiz-feedback');
+    const bgClass = isCorrect ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700';
+    
+    feedback.className = `border px-4 py-3 rounded mb-4 ${bgClass}`;
+    feedback.innerHTML = `
+        <div class="font-semibold">${isCorrect ? '✓ Correct!' : '✗ Incorrect'}</div>
+        ${!isCorrect ? `<div class="mt-1">Correct answer: ${correctAnswer}</div>` : ''}
+        ${explanation ? `<div class="mt-1 text-sm">${explanation}</div>` : ''}
+    `;
+    feedback.classList.remove('hidden');
+}
+
+// Mark card difficulty
+function markCard(difficulty) {
+    const isCorrect = difficulty === 'easy';
+    recordCardInteraction(isCorrect ? 'quiz_correct' : 'quiz_incorrect', isCorrect);
+    updateSessionStats(isCorrect);
+}
+
+// Update session statistics
+function updateSessionStats(isCorrect) {
+    const correctElement = document.getElementById('correct-count');
+    const totalElement = document.getElementById('total-attempts');
+    
+    let correct = parseInt(correctElement.textContent);
+    let total = parseInt(totalElement.textContent);
+    
+    total += 1;
+    if (isCorrect) correct += 1;
+    
+    correctElement.textContent = correct;
+    totalElement.textContent = total;
+    
+    // Update progress bar
+    const progressBar = document.getElementById('progress-bar');
+    const cardsCount = document.getElementById('cards-count');
+    
+    cardsCount.textContent = currentCardIndex + 2; // +2 because we're moving to next
+    progressBar.style.width = `${((currentCardIndex + 1) / totalCards) * 100}%`;
+}
+
+// End session
+function endSession() {
+    const sessionId = "{{ session.id }}";
+    const duration = Math.floor((Date.now() - sessionStartTime) / 60000); // minutes
+    
+    fetch(`/api/study/sessions/${sessionId}/end`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + localStorage.getItem('access_token')
+        },
+        body: JSON.stringify({
+            duration_minutes: duration
+        })
+    })
+    .then(() => {
+        window.location.href = '/study/complete?session=' + sessionId;
+    });
+}
+
+// Initialize quiz timer
+if (studyMode === 'quiz') {
+    currentQuestionStartTime = Date.now();
+}
+</script>
+{% endblock %}
